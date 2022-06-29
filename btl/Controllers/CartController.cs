@@ -13,6 +13,7 @@ using BaiTapLon.Common;
 using BaiTapLon.MoMo_API;
 using Newtonsoft.Json.Linq;
 using System.Net;
+using BaiTapLon.VNPAY_API;
 
 namespace BaiTapLon.Controllers
 {
@@ -326,10 +327,32 @@ namespace BaiTapLon.Controllers
                                 ViewBag.Sum = sum;
                                 Session[CartSession] = null;
                                 Session[OrderIDDel] = orderCode;
-                                return Redirect("https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_Amount=2000000&vnp_Command=pay&vnp_CreateDate=20220628233226&vnp_CurrCode=VND&vnp_ExpireDate=20220628234726&vnp_IpAddr=14.161.45.131&vnp_Locale=vn&vnp_OrderInfo=Thanh+toan+don+hang+thoi+gian%3a+2022-06-28+23%3a32%3a24&vnp_OrderType=topup&vnp_ReturnUrl=https%3a%2f%2fsandbox.vnpayment.vn%2ftryitnow%2fHome%2fVnPayReturn&vnp_TmnCode=2QXUI4J4&vnp_TxnRef=20698&vnp_Version=2.0.0&vnp_SecureHashType=SHA256&vnp_SecureHash=4c1d726a6a10ac11a895802c67eb05c92dc2dafab5a6fc6a2e1cb85ac0335a82");
 
+                                //Build URL for VNPAY
+                                //Get Config Info
+                                string vnp_Returnurl = ConfigurationManager.AppSettings["vnp_Returnurl"]; //URL nhan ket qua tra ve 
+                                string vnp_Url = ConfigurationManager.AppSettings["vnp_Url"]; //URL thanh toan cua VNPAY 
+                                string vnp_TmnCode = ConfigurationManager.AppSettings["vnp_TmnCode"]; //Ma website
+                                string vnp_HashSecret = ConfigurationManager.AppSettings["vnp_HashSecret"]; //Chuoi bi mat
+                                VnPayLibrary vnpay = new VnPayLibrary();
+
+                                vnpay.AddRequestData("vnp_Version", VnPayLibrary.VERSION);
+                                vnpay.AddRequestData("vnp_Command", "pay");
+                                vnpay.AddRequestData("vnp_TmnCode", vnp_TmnCode);
+                                vnpay.AddRequestData("vnp_Amount", (sum * 100).ToString()); //Số tiền thanh toán. Số tiền không mang các ký tự phân tách thập phân, phần nghìn, ký tự tiền tệ. Để gửi số tiền thanh toán là 100,000 VND (một trăm nghìn VNĐ) thì merchant cần nhân thêm 100 lần (khử phần thập phân), sau đó gửi sang VNPAY là: 10000000
+                                
+                                vnpay.AddRequestData("vnp_CreateDate", DateTime.Now.ToString("yyyyMMddHHmmss").ToString());
+                                vnpay.AddRequestData("vnp_CurrCode", "VND");
+                                vnpay.AddRequestData("vnp_IpAddr", Utils.GetIpAddress());
+                                vnpay.AddRequestData("vnp_Locale", "vn");
+                                vnpay.AddRequestData("vnp_OrderInfo", "Thanh toan don hang:" + orderCode);
+                                vnpay.AddRequestData("vnp_OrderType", "other"); //default value: other
+                                vnpay.AddRequestData("vnp_ReturnUrl", vnp_Returnurl);
+                                vnpay.AddRequestData("vnp_TxnRef", orderCode); // Mã tham chiếu của giao dịch tại hệ thống của merchant. Mã này là duy nhất dùng để phân biệt các đơn hàng gửi sang VNPAY. Không được trùng lặp trong ngày
+
+                                string paymentUrl = vnpay.CreateRequestUrl(vnp_Url, vnp_HashSecret);
+                                Response.Redirect(paymentUrl);
                             }
-                            var result = saveOrder(shipName, shipAddress, shipMobile, shipMail, payment_method, orderCode);
                         }
                     }
                 }
@@ -348,7 +371,14 @@ namespace BaiTapLon.Controllers
             return View(OrderInfo);
 
         }
-       
+
+        public ActionResult confirm_orderPaymentOnline()
+        {
+            ViewBag.status = true;
+            return View();
+
+        }
+
         public ActionResult confirm_orderPaymentOnline_momo()
         {
 
